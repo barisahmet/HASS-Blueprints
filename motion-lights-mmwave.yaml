@@ -1,0 +1,170 @@
+blueprint:
+  name: Işık
+  description: Turn on the lights with motion/door sensors. Turn off with radar.
+  domain: automation
+  input:
+    trigger:
+      name: Trigger
+      icon: mdi:cog-outline
+      collapsed: false
+      input:
+        motion_sensor:
+          name: Motion or door sensors
+          description: These sensors are used to turn on the lights. Creating a group helper works better.
+          selector:
+            entity:
+              multiple: true
+              filter:
+                - domain:
+                    - binary_sensor
+                    - schedule
+        radar:
+          name: Radar sensor
+          description: mmWave radar sensor to turn lights off when no occupancy.
+          default:
+          selector:
+            entity:
+              multiple: false
+              filter:
+                - domain: binary_sensor
+                  device_class: occupancy
+    lights:
+      name: Lights
+      icon: mdi:lightbulb
+      collapsed: true
+      input:
+        target_light:
+          name: Lights
+          selector:
+            target:
+              entity:
+                - domain: light
+        brightness:
+          name: Brightness (day)
+          default: 255
+          selector:
+            number:
+              min: 1
+              max: 255
+              mode: slider
+        temperature:
+          name: Temperature (day)
+          default: 3000
+          selector:
+            color_temp:
+              unit: kelvin
+        night_toggle:
+          name: Night mode toggle entity
+          description: If any of these are on, night lights settigns will applied
+          default:
+          selector:
+            entity:
+              multiple: true
+              filter:
+                - domain:
+                    - input_boolean
+                    - binary_sensor
+                    - schedule
+        brightness_night:
+          name: Brightness (night)
+          description: Night brightness.
+          default: 255
+          selector:
+            number:
+              min: 1
+              max: 255
+              mode: slider
+        temperature_night:
+          name: Temperature (night)
+          default: 2700
+          selector:
+            color_temp:
+              unit: kelvin
+        delay:
+          name: Delay (seconds)
+          description: Wait time after mmWave sensor reports absence. The lights will be dimmed AFTER this. If you don't have a radar, please specify reasonable amount of delay.
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 600
+              mode: slider
+        brightness_step_pct:
+          name: Dim amount
+          description: Relative dim amount when the lights about to turn off.
+          default: -30
+          selector:
+            number:
+              min: -100
+              max: 100
+              mode: slider
+        dim_time:
+          name: Dimmed time (seconds)
+          description: Time to pass to turn lights off from dimmed state.
+          default: 15
+          selector:
+            number:
+              min: 0
+              max: 60
+              mode: slider
+
+variables:
+  mmwave: !input radar
+  mmwave_exists: "{{ expand(mmwave) | list | count > 0 }}"
+  brightness_day: !input brightness
+  brightness_night: !input brightness_night
+  night_light_entities: !input "night_toggle"
+  is_night: "{{ expand(night_light_entities) | selectattr('state', '==', 'on') | list | count > 0  }}"
+  lights: !input "target_light"
+  is_lights_on: "{{ expand(lights.entity_id) | selectattr('state', '==', 'on') | selectattr('attributes.brightness', 'defined') | selectattr('attributes.brightness', '>=', (brightness_night if is_night else brightness_day)) | list | count == 0 }}"
+
+triggers:
+  - trigger: state
+    entity_id: !input motion_sensor
+    from: "off"
+    to: "on"
+  - trigger: state
+    entity_id: !input radar
+    from: "off"
+    to: "on"
+
+actions:
+  - if:
+      - "{{ is_lights_on }}"
+    then:
+      - if:
+          - "{{ is_night }}"
+        then:
+          - action: light.turn_on
+            data:
+              kelvin: !input temperature_night
+              brightness: !input brightness_night
+              transition: 1
+            target: !input target_light
+        else:
+          - action: light.turn_on
+            data:
+              kelvin: !input temperature
+              brightness: !input brightness
+              transition: 1
+            target: !input target_light
+  - if:
+      - "{{ mmwave_exists }}"
+    then:
+      - wait_for_trigger:
+          - trigger: state
+            entity_id: !input radar
+            from: "on"
+            to: "off"
+        continue_on_timeout: false
+  - delay:
+      seconds: !input delay
+  - action: light.turn_on
+    data:
+      brightness_step_pct: !input brightness_step_pct
+    target: !input target_light
+  - delay:
+      seconds: !input dim_time
+  - action: light.turn_off
+    target: !input target_light
+mode: restart

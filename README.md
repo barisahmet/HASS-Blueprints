@@ -1,2 +1,2 @@
 # HASS-Blueprints
-Personal Home Assistant blueprints.
+Personal Home Assistant blueprints repository.
