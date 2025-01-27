@@ -118,15 +118,20 @@ variables:
   lights: !input "target_light"
   is_lights_on: "{{ expand(lights.entity_id) | selectattr('state', '==', 'on') | selectattr('attributes.brightness', 'defined') | selectattr('attributes.brightness', '>=', (brightness_night if is_night else brightness_day)) | list | count == 0 }}"
 
+trigger_variables:
+  mmwave: !input radar
+
 triggers:
   - trigger: state
     entity_id: !input motion_sensor
     from: "off"
     to: "on"
-  - trigger: state
-    entity_id: !input radar
-    from: "off"
-    to: "on"
+  - trigger: template
+    value_template: "{{ is_state(mmwave, 'on') }}"
+  # - trigger: state
+  #   entity_id: !input radar
+  #   from: "off"
+  #   to: "on"
 
 actions:
   - if:
@@ -151,12 +156,8 @@ actions:
   - if:
       - "{{ mmwave_exists }}"
     then:
-      - wait_for_trigger:
-          - trigger: state
-            entity_id: !input radar
-            from: "on"
-            to: "off"
-        continue_on_timeout: false
+      - wait_template: "{{ is_state(mmwave, 'off') }}"
+        continue_on_timeout: true
   - delay:
       seconds: !input delay
   - action: light.turn_on
