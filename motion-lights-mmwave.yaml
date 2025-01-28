@@ -151,14 +151,14 @@ variables:
   brightness: !input brightness
   brightness_night: !input brightness_night
   mmwave: !input radar
-  mmwave_exists: "{{ expand(mmwave) | list | count > 0 }}"
+  mmwave_exists: "{{ mmwave is defined and expand(mmwave) | list | count > 0 }}"
   night_light_entities: !input "night_toggle"
   is_night: "{{ expand(night_light_entities) | selectattr('state', '==', 'on') | list | count > 0  }}"
   lights: !input "target_light"
   is_lights_on: "{{ expand(lights.entity_id) | selectattr('state', '==', 'on') | selectattr('attributes.brightness', 'defined') | selectattr('attributes.brightness', '>=', (brightness_night if is_night else brightness)) | list | count > 0 }}"
   lights_night: !input "target_light_night"
-  lights_night_exists: "{{ lights_night.entity_id is defined and expand(lights_night.entity_id) | list | count > 0 }}"
-  is_lights_on_night: "{{ lights_night.entity_id is defined and expand(lights_night.entity_id) if night_light_exists else expand(lights_night.entity_id) | selectattr('state', '==', 'on') | selectattr('attributes.brightness', 'defined') | selectattr('attributes.brightness', '>=', (brightness_night if is_night else brightness)) | list | count > 0 }}"
+  lights_night_exists: "{{ lights_night is defined and lights_night.entity_id is defined and expand(lights_night.entity_id) | list | count > 0 }}"
+  is_lights_on_night: "{{ lights_night is defined and lights_night.entity_id is defined and expand(lights_night.entity_id) if night_light_exists else expand(lights.entity_id) | selectattr('state', '==', 'on') | selectattr('attributes.brightness', 'defined') | selectattr('attributes.brightness', '>=', (brightness_night if is_night else brightness)) | list | count > 0 }}"
   ambient_sensor: !input ambient_sensor
   ambient_sensor_exists: "{{ ambient_sensor is defined and expand(ambient_sensor) | list | count > 0 }}"
   current_lux: "{{ states(ambient_sensor) if ambient_sensor_exists else -1 }}"
@@ -212,3 +212,4 @@ actions:
   - action: light.turn_off
     target: "{{ lights_night if lights_night_exists and is_night else lights }}"
 mode: restart
+
