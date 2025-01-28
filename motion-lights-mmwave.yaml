@@ -190,7 +190,7 @@ actions:
         then:
           - action: light.turn_on
             data:
-              kelvin: "{{ temperature_night if is_night else temperature}}"
+              color_temp_kelvin: "{{ temperature_night if is_night else temperature}}"
               brightness: "{{ brightness_night if is_night else brightness}}"
               transition: 1
             target: "{{ lights_night if (lights_night_exists and is_night) else lights }}"
