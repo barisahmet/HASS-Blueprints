@@ -1,5 +1,5 @@
 blueprint:
-  name: Motion Lights with mmWave Radar turn-off option
+  name: ISIKDEV
   description: Turn on the lights with motion/door sensors. Turn off with radar.
   domain: automation
   input:
@@ -160,8 +160,8 @@ variables:
   lights_night_exists: "{{ lights_night.entity_id is defined and expand(lights_night.entity_id) | list | count > 0 }}"
   is_lights_on_night: "{{ lights_night.entity_id is defined and expand(lights_night.entity_id) if night_light_exists else expand(lights_night.entity_id) | selectattr('state', '==', 'on') | selectattr('attributes.brightness', 'defined') | selectattr('attributes.brightness', '>=', (brightness_night if is_night else brightness)) | list | count > 0 }}"
   ambient_sensor: !input ambient_sensor
-  ambient_sensor_exists: "{{ expand(ambient_sensor) | list | count > 0 }}"
-  current_lux: "{{ states(ambient_sensor) }}"
+  ambient_sensor_exists: "{{ ambient_sensor is defined and expand(ambient_sensor) | list | count > 0 }}"
+  current_lux: "{{ states(ambient_sensor) if ambient_sensor_exists else -1 }}"
   minimum_lux: !input min_lux
 
 trigger_variables:
