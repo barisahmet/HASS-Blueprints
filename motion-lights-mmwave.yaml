@@ -1,5 +1,5 @@
 blueprint:
-  name: Işık
+  name: ISIKDEV
   description: Turn on the lights with motion/door sensors. Turn off with radar.
   domain: automation
   input:
@@ -35,6 +35,14 @@ blueprint:
       input:
         target_light:
           name: Lights
+          selector:
+            target:
+              entity:
+                - domain: light
+        target_light_night:
+          name: Lights for night
+          description: Lights to turn on in night mode. If you don't specify this, day lights will be used.
+          default: []
           selector:
             target:
               entity:
@@ -108,15 +116,53 @@ blueprint:
               max: 60
               mode: slider
 
+    ambient:
+      name: Ambient
+      icon: mdi:theme-light-dark
+      collapsed: false
+      input:
+        ambient_sensor:
+          name: Ambient light sensor
+          description: Sensor to determine the ambient light.
+          default: []
+          selector:
+            entity:
+              filter:
+                - domain:
+                    - sensor
+                  device_class:
+                    - illuminance
+              multiple: false
+        min_lux:
+          name: Minimum ambient light
+          description: If the sensor reports lower lux value than this, lights will be on.
+          default: 50
+          selector:
+            number:
+              min: 0
+              max: 1000
+              step: 1
+              unit_of_measurement: lux
+              mode: slider
+
 variables:
+  temperature: !input temperature
+  temperature_night: !input temperature_night
+  brightness: !input brightness
+  brightness_night: !input brightness_night
   mmwave: !input radar
   mmwave_exists: "{{ expand(mmwave) | list | count > 0 }}"
-  brightness_day: !input brightness
-  brightness_night: !input brightness_night
   night_light_entities: !input "night_toggle"
   is_night: "{{ expand(night_light_entities) | selectattr('state', '==', 'on') | list | count > 0  }}"
   lights: !input "target_light"
-  is_lights_on: "{{ expand(lights.entity_id) | selectattr('state', '==', 'on') | selectattr('attributes.brightness', 'defined') | selectattr('attributes.brightness', '>=', (brightness_night if is_night else brightness_day)) | list | count == 0 }}"
+  is_lights_on: "{{ expand(lights.entity_id) | selectattr('state', '==', 'on') | selectattr('attributes.brightness', 'defined') | selectattr('attributes.brightness', '>=', (brightness_night if is_night else brightness)) | list | count > 0 }}"
+  lights_night: !input "target_light_night"
+  lights_night_exists: "{{ lights_night.entity_id is defined and expand(lights_night.entity_id) | list | count > 0 }}"
+  is_lights_on_night: "{{ lights_night.entity_id is defined and expand(lights_night.entity_id) if night_light_exists else expand(lights_night.entity_id) | selectattr('state', '==', 'on') | selectattr('attributes.brightness', 'defined') | selectattr('attributes.brightness', '>=', (brightness_night if is_night else brightness)) | list | count > 0 }}"
+  ambient_sensor: !input ambient_sensor
+  ambient_sensor_exists: "{{ expand(ambient_sensor) | list | count > 0 }}"
+  current_lux: "{{ states(ambient_sensor) }}"
+  minimum_lux: !input min_lux
 
 trigger_variables:
   mmwave: !input radar
@@ -127,45 +173,42 @@ triggers:
     from: "off"
     to: "on"
   - trigger: template
-    value_template: "{{ is_state(mmwave, 'on') }}"
-  # - trigger: state
-  #   entity_id: !input radar
-  #   from: "off"
-  #   to: "on"
+    value_template: "{{ states(mmwave) == 'on' }}"
+
+conditions:
+  - condition: template
+    value_template: |
+      {%- set last = state_attr(this.entity_id, 'last_triggered') %}
+      {{ last is not none and now() - last > timedelta(seconds=2) }}
 
 actions:
   - if:
-      - "{{ is_lights_on }}"
+      - "{{ (not is_night and not is_lights_on) or (is_night and not is_lights_on_night) }}"
     then:
       - if:
-          - "{{ is_night }}"
+          - "{{ not (ambient_sensor_exists) or (ambient_sensor_exists and current_lux < minimum_lux) }}"
         then:
           - action: light.turn_on
             data:
-              kelvin: !input temperature_night
-              brightness: !input brightness_night
+              kelvin: "{{ temperature_night if is_night else temperature}}"
+              brightness: "{{ brightness_night if is_night else brightness}}"
               transition: 1
-            target: !input target_light
-        else:
-          - action: light.turn_on
-            data:
-              kelvin: !input temperature
-              brightness: !input brightness
-              transition: 1
-            target: !input target_light
+            target: "{{ lights_night if (lights_night_exists and is_night) else lights }}"
+  - delay:
+      seconds: 3
   - if:
       - "{{ mmwave_exists }}"
     then:
-      - wait_template: "{{ is_state(mmwave, 'off') }}"
+      - wait_template: "{{ states(mmwave) == 'off' }}"
         continue_on_timeout: true
   - delay:
       seconds: !input delay
   - action: light.turn_on
     data:
       brightness_step_pct: !input brightness_step_pct
-    target: !input target_light
+    target: "{{ lights_night if lights_night_exists and is_night else lights }}"
   - delay:
       seconds: !input dim_time
   - action: light.turn_off
-    target: !input target_light
+    target: "{{ lights_night if lights_night_exists and is_night else lights }}"
 mode: restart
