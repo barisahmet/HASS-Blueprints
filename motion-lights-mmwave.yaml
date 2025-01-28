@@ -1,5 +1,5 @@
 blueprint:
-  name: ISIKDEV
+  name: Motion Lights with mmWave Radar turn-off option
   description: Turn on the lights with motion/door sensors. Turn off with radar.
   domain: automation
   input:
