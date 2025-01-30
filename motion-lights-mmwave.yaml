@@ -97,6 +97,15 @@ blueprint:
               min: 0
               max: 600
               mode: slider
+        delay_non_mmwave:
+          name: Non-mmWave Delay (seconds)
+          description: Fallback delay if you don't have mmWave sensor or used if mmWave didn't trigger.
+          default: 60
+          selector:
+            number:
+              min: 0
+              max: 600
+              mode: slider
         brightness_step_pct:
           name: Dim amount
           description: Relative dim amount when the lights about to turn off.
@@ -150,6 +159,7 @@ variables:
   temperature_night: !input temperature_night
   brightness: !input brightness
   brightness_night: !input brightness_night
+  motion_sensor: !input motion_sensor
   mmwave: !input radar
   mmwave_exists: "{{ mmwave is defined and expand(mmwave) | list | count > 0 }}"
   night_light_entities: !input "night_toggle"
@@ -157,36 +167,65 @@ variables:
   lights: !input "target_light"
   is_lights_on: "{{ expand(lights.entity_id) | selectattr('state', '==', 'on') | selectattr('attributes.brightness', 'defined') | selectattr('attributes.brightness', '>=', (brightness_night if is_night else brightness)) | list | count > 0 }}"
   lights_night: !input "target_light_night"
+  lights_night_list: "{{ lights_night.entity_id if lights_night.entity_id is defined else [] }}"
   lights_night_exists: "{{ lights_night is defined and lights_night.entity_id is defined and expand(lights_night.entity_id) | list | count > 0 }}"
-  is_lights_on_night: "{{ lights_night is defined and lights_night.entity_id is defined and expand(lights_night.entity_id) if night_light_exists else expand(lights.entity_id) | selectattr('state', '==', 'on') | selectattr('attributes.brightness', 'defined') | selectattr('attributes.brightness', '>=', (brightness_night if is_night else brightness)) | list | count > 0 }}"
+  is_lights_on_night: "{{ (expand(lights_night.entity_id) | selectattr('state', '==', 'on') | list | count > 0) if lights_night_exists else (expand(lights.entity_id) | selectattr('state', '==', 'on') | selectattr('attributes.brightness', 'defined') | selectattr('attributes.brightness', '>=', (brightness_night if is_night else brightness)) | list | count > 0) }}"
   ambient_sensor: !input ambient_sensor
   ambient_sensor_exists: "{{ ambient_sensor is defined and expand(ambient_sensor) | list | count > 0 }}"
   current_lux: "{{ states(ambient_sensor) if ambient_sensor_exists else -1 }}"
   minimum_lux: !input min_lux
-
-trigger_variables:
-  mmwave: !input radar
+  lights_day_only_list: >
+    {% set all_lights = lights.entity_id %}
+    {% set night_lights = lights_night_list %}
+    {{ all_lights | reject('in', night_lights) | list }}
 
 triggers:
   - trigger: state
     entity_id: !input motion_sensor
     from: "off"
     to: "on"
-  - trigger: template
-    value_template: "{{ states(mmwave) == 'on' }}"
+  - trigger: state
+    entity_id: !input radar
+    from: "off"
+    to: "on"
+  - trigger: state
+    id: nt_on
+    entity_id: !input night_toggle
+    to: "on"
+  - trigger: state
+    id: nt_off
+    entity_id: !input night_toggle
+    to: "off"
 
 conditions:
   - condition: template
     value_template: |
       {%- set last = state_attr(this.entity_id, 'last_triggered') %}
-      {{ last is not none and now() - last > timedelta(seconds=2) }}
+      {{ (last is none) or (now() - last > timedelta(seconds=1)) }}
 
 actions:
-  - if:
-      - "{{ (not is_night and not is_lights_on) or (is_night and not is_lights_on_night) }}"
+  - if: "{{ trigger.id == 'nt_on' and not is_lights_on }}"
     then:
-      - if:
-          - "{{ not (ambient_sensor_exists) or (ambient_sensor_exists and current_lux < minimum_lux) }}"
+      - stop: Lights are off!
+  - if: "{{ trigger.id == 'nt_off' and not is_lights_on_night }}"
+    then:
+      - stop: Lights are off!
+  - if: "{{ trigger.id == 'nt_on' }}" # day -> night
+    then:
+      - if: "{{ is_lights_on }}"
+        then:
+          - action: light.turn_off # turn off day-only lights
+            data:
+              entity_id: "{{ lights_day_only_list }}"
+          - action: light.turn_on # adjust night lights temp. etc
+            data:
+              color_temp_kelvin: "{{ temperature_night }}"
+              brightness: "{{ brightness_night }}"
+              transition: 0
+            target: "{{ lights_night }}"
+  - if: "{{ (not is_night and not is_lights_on) or (is_night and not is_lights_on_night) }}"
+    then:
+      - if: "{{ not (ambient_sensor_exists) or (ambient_sensor_exists and current_lux < minimum_lux) }}"
         then:
           - action: light.turn_on
             data:
@@ -194,20 +233,34 @@ actions:
               brightness: "{{ brightness_night if is_night else brightness}}"
               transition: 1
             target: "{{ lights_night if (lights_night_exists and is_night) else lights }}"
-  - if:
-      - "{{ mmwave_exists }}"
+  - if: "{{ mmwave_exists }}"
     then:
-      - wait_template: "{{ states(mmwave) == 'on' }}"
-        continue_on_timeout: true
+      - wait_for_trigger:
+          - trigger: state
+            entity_id: !input radar
+            to: "on"
         timeout:
-          seconds: 30
-  - if:
-      - "{{ mmwave_exists }}"
-    then:
-      - wait_template: "{{ states(mmwave) == 'off' }}"
-        continue_on_timeout: true
-  - delay:
-      seconds: !input delay
+          seconds: 10
+      - if: "{{ states(mmwave) == 'on' }}" # mmwave sensor triggered
+        then:
+          - wait_for_trigger:
+              - trigger: state
+                entity_id: !input radar
+                to: "off"
+        else: # fall back to motion sensor
+          - delay:
+              seconds: !input delay_non_mmwave
+      - delay: # default mmWave delay
+          seconds: !input delay
+    else: # mmWave doesn't exist
+      - if: "{{ states(motion_sensor) == 'on' }}"
+        then:
+          - wait_for_trigger:
+              - trigger: state
+                entity_id: !input motion_sensor
+                to: "off"
+      - delay: # motion sensor delay
+          seconds: !input delay_non_mmwave
   - action: light.turn_on
     data:
       brightness_step_pct: !input brightness_step_pct
