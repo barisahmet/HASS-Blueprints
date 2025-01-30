@@ -21,7 +21,7 @@ blueprint:
         radar:
           name: Radar sensor
           description: mmWave radar sensor to turn lights off when no occupancy.
-          default:
+          default: []
           selector:
             entity:
               multiple: false
@@ -99,7 +99,7 @@ blueprint:
               mode: slider
         delay_non_mmwave:
           name: Non-mmWave Delay (seconds)
-          description: Fallback delay if you don't have mmWave sensor or used if mmWave didn't trigger.
+          description: Fallback delay if you don't have mmWave sensor / if mmWave didn't trigger in time.
           default: 60
           selector:
             number:
