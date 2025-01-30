@@ -9,11 +9,11 @@ blueprint:
       collapsed: false
       input:
         motion_sensor:
-          name: Motion or door sensors
-          description: These sensors are used to turn on the lights. Creating a group helper works better.
+          name: Motion or door sensor / group
+          description: These sensors are used to turn on the lights.
           selector:
             entity:
-              multiple: true
+              multiple: false
               filter:
                 - domain:
                     - binary_sensor
@@ -64,7 +64,7 @@ blueprint:
         night_toggle:
           name: Night mode toggle entity
           description: If any of these are on, night lights settigns will applied
-          default:
+          default: []
           selector:
             entity:
               multiple: true
@@ -196,6 +196,10 @@ triggers:
     id: nt_off
     entity_id: !input night_toggle
     to: "off"
+  - trigger: numeric_state
+    id: illuminance
+    entity_id: !input ambient_sensor
+    below: !input min_lux
 
 conditions:
   - condition: template
@@ -210,6 +214,11 @@ actions:
   - if: "{{ trigger.id == 'nt_off' and not is_lights_on_night }}"
     then:
       - stop: Lights are off!
+  - if: "{{ trigger.id == 'illuminance' }}"
+    then:
+      - if: "{{ (mmwave_exists and states(mmwave) == 'off') and (states(motion_sensor) == 'off')  }}"
+        then:
+          - stop: No occupancy!
   - if: "{{ trigger.id == 'nt_on' }}" # day -> night
     then:
       - if: "{{ is_lights_on }}"
