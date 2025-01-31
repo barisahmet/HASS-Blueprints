@@ -161,13 +161,13 @@ variables:
   brightness_night: !input brightness_night
   motion_sensor: !input motion_sensor
   mmwave: !input radar
-  mmwave_exists: "{{ mmwave is defined and expand(mmwave) | list | count > 0 }}"
+  mmwave_exists: "{{ mmwave is defined and mmwave | count > 0 }}"
   night_light_entities: !input "night_toggle"
-  is_night: "{{ expand(night_light_entities) | selectattr('state', '==', 'on') | list | count > 0  }}"
+  is_night: "{{ night_light_entities is defined and night_light_entities | count > 0 and expand(night_light_entities) | selectattr('state', '==', 'on') | list | count > 0 }}"
   lights: !input "target_light"
   is_lights_on: "{{ expand(lights.entity_id) | selectattr('state', '==', 'on') | selectattr('attributes.brightness', 'defined') | selectattr('attributes.brightness', '>=', (brightness_night if is_night else brightness)) | list | count > 0 }}"
   lights_night: !input "target_light_night"
-  lights_night_list: "{{ lights_night.entity_id if lights_night.entity_id is defined else [] }}"
+  lights_night_list: "{{ lights_night.entity_id | default([]) }}"
   lights_night_exists: "{{ lights_night is defined and lights_night.entity_id is defined and expand(lights_night.entity_id) | list | count > 0 }}"
   is_lights_on_night: "{{ (expand(lights_night.entity_id) | selectattr('state', '==', 'on') | list | count > 0) if lights_night_exists else (expand(lights.entity_id) | selectattr('state', '==', 'on') | selectattr('attributes.brightness', 'defined') | selectattr('attributes.brightness', '>=', (brightness_night if is_night else brightness)) | list | count > 0) }}"
   ambient_sensor: !input ambient_sensor
@@ -200,6 +200,7 @@ triggers:
     id: illuminance
     entity_id: !input ambient_sensor
     below: !input min_lux
+    enabled: "{{ ambient_sensor_exists }}"
 
 conditions:
   - condition: template
@@ -231,7 +232,7 @@ actions:
               color_temp_kelvin: "{{ temperature_night }}"
               brightness: "{{ brightness_night }}"
               transition: 0
-            target: "{{ lights_night }}"
+            target: "{{ lights_night if lights_night_exists else lights }}"
   - if: "{{ (not is_night and not is_lights_on) or (is_night and not is_lights_on_night) }}"
     then:
       - if: "{{ not (ambient_sensor_exists) or (ambient_sensor_exists and current_lux < minimum_lux) }}"
@@ -240,7 +241,7 @@ actions:
             data:
               color_temp_kelvin: "{{ temperature_night if is_night else temperature}}"
               brightness: "{{ brightness_night if is_night else brightness}}"
-              transition: 1
+              transition: 0
             target: "{{ lights_night if (lights_night_exists and is_night) else lights }}"
   - if: "{{ mmwave_exists }}"
     then:
