@@ -326,18 +326,12 @@ actions:
             target: "{{ lights_night if (lights_night_exists and is_night) else lights }}"
   - if: "{{ mmwave_exists }}"
     then:
-      - wait_for_trigger:
-          - trigger: state
-            entity_id: !input radar
-            to: "on"
+      - wait_template: "{{ states(mmwave) == 'on' }}"
         timeout:
-          seconds: 10
+          seconds: 20
       - if: "{{ states(mmwave) == 'on' }}"
         then:
-          - wait_for_trigger:
-              - trigger: state
-                entity_id: !input radar
-                to: "off"
+          - wait_template: "{{ states(mmwave) == 'off' }}"
         else:
           - delay:
               seconds: !input delay_non_mmwave
@@ -346,15 +340,13 @@ actions:
     else:
       - if: "{{ states(motion_sensor) == 'on' }}"
         then:
-          - wait_for_trigger:
-              - trigger: state
-                entity_id: !input motion_sensor
-                to: "off"
+          - wait_template: "{{ states(motion_sensor) == 'off' }}"
       - delay:
           seconds: !input delay_non_mmwave
   - action: light.turn_on
     data:
       brightness_step_pct: !input brightness_step_pct
+      transition: "{{ transition_night_off if is_night else transition_day_off }}"
     target: "{{ lights_night if lights_night_exists and is_night else lights }}"
   - delay:
       seconds: !input dim_time
