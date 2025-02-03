@@ -124,6 +124,15 @@ blueprint:
               min: 0
               max: 60
               mode: slider
+        transition:
+          name: Transition (seconds)
+          description: Transition of lights.
+          default: 0
+          selector:
+            number:
+              min: 0
+              max: 20
+              mode: slider
 
     ambient:
       name: Ambient
@@ -160,6 +169,7 @@ variables:
   brightness: !input brightness
   brightness_night: !input brightness_night
   motion_sensor: !input motion_sensor
+  transition: !input transition
   mmwave: !input radar
   mmwave_exists: "{{ mmwave is defined and mmwave | count > 0 }}"
   night_light_entities: !input "night_toggle"
@@ -197,7 +207,7 @@ triggers:
     entity_id: !input night_toggle
     to: "off"
   - trigger: numeric_state
-    id: illuminance
+    id: illuminance_low
     entity_id: !input ambient_sensor
     below: !input min_lux
     enabled: "{{ ambient_sensor_exists }}"
@@ -215,7 +225,7 @@ actions:
   - if: "{{ trigger.id == 'nt_off' and not is_lights_on_night }}"
     then:
       - stop: Lights are off!
-  - if: "{{ trigger.id == 'illuminance' }}"
+  - if: "{{ trigger.id == 'illuminance_low' }}"
     then:
       - if: "{{ (mmwave_exists and states(mmwave) == 'off') and (states(motion_sensor) == 'off')  }}"
         then:
@@ -231,7 +241,7 @@ actions:
             data:
               color_temp_kelvin: "{{ temperature_night }}"
               brightness: "{{ brightness_night }}"
-              transition: 0
+              transition: "{{ transition }}"
             target: "{{ lights_night if lights_night_exists else lights }}"
   - if: "{{ (not is_night and not is_lights_on) or (is_night and not is_lights_on_night) }}"
     then:
@@ -241,7 +251,7 @@ actions:
             data:
               color_temp_kelvin: "{{ temperature_night if is_night else temperature}}"
               brightness: "{{ brightness_night if is_night else brightness}}"
-              transition: 0
+              transition: "{{ transition }}"
             target: "{{ lights_night if (lights_night_exists and is_night) else lights }}"
   - if: "{{ mmwave_exists }}"
     then:
