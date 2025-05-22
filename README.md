@@ -13,7 +13,7 @@ This repository contains a collection of personal Home Assistant blueprints desi
 **Blueprint file:** [`motion-lights-mmwave.yaml`](https://github.com/barisahmet/HASS-Blueprints/blob/main/motion-lights-mmwave.yaml)
 
 **Home Assistant Blueprint Import Link:**  
-[![Import Blueprint](https://my.home-assistant.io/badges/automation.svg)](https://my.home-assistant.io/redirect/blueprint_import/?repository_url=https://github.com/barisahmet/HASS-Blueprints/blob/main/motion-lights-mmwave.yaml)
+[Click here](https://my.home-assistant.io/redirect/blueprint_import/?repository_url=https://github.com/barisahmet/HASS-Blueprints/blob/main/motion-lights-mmwave.yaml) to import the blueprint.
 
 Automate lighting using a mmWave motion sensor for precise and reliable presence detection. This blueprint allows lights to turn on when motion is detected and off after a user-defined delay, leveraging the advanced capabilities of mmWave technology.
 
